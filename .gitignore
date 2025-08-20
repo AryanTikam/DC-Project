@@ -1,2 +1,4 @@
 *.class
 *.jar
+*.pyc
+/__pycache__/
