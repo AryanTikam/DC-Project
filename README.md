@@ -14,8 +14,8 @@ It demonstrates how clients (riders and drivers) can remotely interact with a ce
 ## 📖 Reference
 
 This implementation is inspired by the concepts explained in:
-*👉 [Remote Procedure Call (RPC) – GeeksforGeeks](https://www.geeksforgeeks.org/operating-systems/remote-procedure-call-rpc-in-operating-system/)
-*👉 [Java Remote Method Invocation (RMI) – GeeksforGeeks](https://www.geeksforgeeks.org/java/remote-method-invocation-in-java/)
+  *👉 [Remote Procedure Call (RPC) – GeeksforGeeks](https://www.geeksforgeeks.org/operating-systems/remote-procedure-call-rpc-in-operating-system/)
+  *👉 [Java Remote Method Invocation (RMI) – GeeksforGeeks](https://www.geeksforgeeks.org/java/remote-method-invocation-in-java/)
 
 ---
 
