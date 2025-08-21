@@ -11,7 +11,7 @@ It demonstrates how clients (riders and drivers) can remotely interact with a ce
 
 ---
 
-## 📖 Reference
+## Reference
 
 This implementation is inspired by the concepts explained in:
 - [Remote Procedure Call (RPC) – GeeksforGeeks](https://www.geeksforgeeks.org/operating-systems/remote-procedure-call-rpc-in-operating-system/)
