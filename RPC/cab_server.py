@@ -1,11 +1,14 @@
-from xmlrpc.server import SimpleXMLRPCServer
-from xmlrpc.server import SimpleXMLRPCRequestHandler
+from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from socketserver import ThreadingMixIn
 import threading
 from ride import Ride
 from user import User
 
 class RequestHandler(SimpleXMLRPCRequestHandler):
     rpc_paths = ('/RPC2',)
+
+class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
+    pass
 
 class CabService:
     def __init__(self):
@@ -192,11 +195,9 @@ class CabService:
         return base_fare + (mock_distance * distance_multiplier)
 
 def main():
-    # Create server
-    server = SimpleXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
+    server = ThreadedXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
     server.register_introspection_functions()
     
-    # Create and register the cab service
     cab_service = CabService()
     server.register_instance(cab_service)
     

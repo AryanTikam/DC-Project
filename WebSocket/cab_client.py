@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import json
-import sys
 
 class CabClient:
     def __init__(self, server_uri="ws://localhost:8765"):
