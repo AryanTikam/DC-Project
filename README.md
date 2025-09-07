@@ -1,6 +1,6 @@
-# Cab Booking System using Java RMI
+# Cab Booking System
 
-This project is a **Cab Booking System prototype** implemented using **Java RMI (Remote Method Invocation)**.  
+This project is a **Cab Booking System prototype** implemented using **RPC (Remote Procedure Call), Java RMI (Remote Method Invocation) and Web Sockets**.  
 It demonstrates how clients (riders and drivers) can remotely interact with a central server to perform core operations like:
 
 - Rider and Driver registration  
