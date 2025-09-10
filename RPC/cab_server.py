@@ -1,6 +1,7 @@
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from socketserver import ThreadingMixIn
 import threading
+import time
 from ride import Ride
 from user import User
 
@@ -175,6 +176,26 @@ class CabService:
         available_count = sum(1 for available in self.driver_availability.values() 
                              if available)
         return {"success": True, "count": available_count}
+    
+    def get_server_time(self):
+        """Return server's current time (timestamp)"""
+        return time.time()
+
+    def synchronize_clocks(self, client_times):
+        """
+        Berkeley's Algorithm: 
+        client_times: dict {client_name: timestamp}
+        Returns dict {client_name: offset_to_apply}
+        """
+        server_time = time.time()
+        all_times = [server_time] + list(client_times.values())
+        avg_time = sum(all_times) / len(all_times)
+        offsets = {}
+        offsets["server"] = avg_time - server_time
+        for client, t in client_times.items():
+            offsets[client] = avg_time - t
+        print(f"Clock sync offsets: {offsets}")
+        return offsets
     
     # Helper methods
     def find_nearest_driver(self, pickup):

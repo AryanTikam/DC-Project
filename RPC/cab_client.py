@@ -1,5 +1,6 @@
 import xmlrpc.client
 import sys
+import time
 
 class CabClient:
     def __init__(self, server_url="http://localhost:8000"):
@@ -32,6 +33,7 @@ class CabClient:
             print("5. Set Driver Available (Driver only)")
         print("6. System Stats")
         print("7. Logout")
+        print("8. Sync Clock")
         print("-" * 50)
     
     def register_user(self):
@@ -199,6 +201,24 @@ class CabClient:
         except Exception as e:
             print(f"Error fetching system stats: {e}")
     
+    def get_local_time(self):
+        """Return client's current time (timestamp)"""
+        return time.time()
+
+    def sync_clock_with_server(self):
+        """Synchronize clock using Berkeley's algorithm"""
+        try:
+            print("\n--- Clock Synchronization ---")
+            local_time = self.get_local_time()
+            # For demo, assume only one client; in real, collect from all clients
+            client_times = {self.current_user: local_time}
+            offsets = self.server.synchronize_clocks(client_times)
+            offset = offsets.get(self.current_user)
+            print(f"Your clock offset: {offset} seconds")
+            # In real system, you'd adjust your clock here
+        except Exception as e:
+            print(f"Error during clock sync: {e}")
+    
     def run(self):
         """Main client loop"""
         while True:
@@ -218,7 +238,7 @@ class CabClient:
                         print("Invalid choice!")
                 else:
                     self.show_main_menu()
-                    max_choice = 7 if self.user_type == "RIDER" else 7
+                    max_choice = 8
                     choice = input(f"Choose option (1-{max_choice}): ").strip()
                     
                     if choice == '1':
@@ -237,6 +257,8 @@ class CabClient:
                         self.current_user = None
                         self.user_type = None
                         print("Logged out successfully!")
+                    elif choice == '8':
+                        self.sync_clock_with_server()
                     else:
                         print("Invalid choice!")
                         
