@@ -15,8 +15,8 @@ class CabService:
     def __init__(self):
         self.users = {}
         self.rides = {}
-        self.driver_locations = {}  # driverName -> location
-        self.driver_availability = {}  # driverName -> available
+        self.driver_locations = {}  
+        self.driver_availability = {}  
         self.ride_counter = 1000
         self.lock = threading.Lock()
         self.lamport_clock = 0  # Lamport logical clock for server
@@ -26,7 +26,6 @@ class CabService:
 
     # --- Lamport helpers ---
     def _update_lamport_on_receive(self, client_clock):
-        """Update server's Lamport clock upon receiving an event (RPC) with client's clock."""
         try:
             # If client_clock is None/absent, treat as 0
             rc = int(client_clock) if client_clock is not None else 0
@@ -35,12 +34,10 @@ class CabService:
         self.lamport_clock = max(self.lamport_clock, rc) + 1
 
     def _increment_internal(self):
-        """Internal event on server increments lamport clock."""
         self.lamport_clock += 1
 
     # --- Data initialization ---
     def initialize_sample_data(self):
-        """Initialize with some sample drivers"""
         try:
             # Add sample drivers (use client_clock 0 for initialization)
             self.register_user("driver1", "pass123", "DRIVER", 0)
@@ -58,7 +55,6 @@ class CabService:
 
     # --- RPC methods (each accepts client_clock as last param) ---
     def register_user(self, username, password, user_type, client_clock=None):
-        """Register a new user (expects client_clock)"""
         with self.lock:
             self._update_lamport_on_receive(client_clock)
             if username in self.users:
@@ -75,7 +71,6 @@ class CabService:
             return {"success": True, "message": "Registration successful", "server_clock": self.lamport_clock}
 
     def authenticate_user(self, username, password, client_clock=None):
-        """Authenticate user credentials"""
         self._update_lamport_on_receive(client_clock)
         user = self.users.get(username)
         if user and user.password == password:
@@ -90,7 +85,6 @@ class CabService:
         return {"success": False, "message": "Invalid credentials", "server_clock": self.lamport_clock}
 
     def book_cab(self, username, pickup, destination, client_clock=None):
-        """Book a new ride"""
         with self.lock:
             self._update_lamport_on_receive(client_clock)
             if username not in self.users:
@@ -111,7 +105,7 @@ class CabService:
             ride.fare = fare
 
             self.rides[ride_id] = ride
-            self.driver_availability[assigned_driver] = False  # Mark driver as busy
+            self.driver_availability[assigned_driver] = False  
 
             self._increment_internal()
             print(f"[Lamport {self.lamport_clock}] Ride booked - ID: {ride_id}, Driver: {assigned_driver}, Fare: ₹{fare}")
@@ -125,7 +119,6 @@ class CabService:
             }
 
     def cancel_ride(self, ride_id, client_clock=None):
-        """Cancel a ride"""
         with self.lock:
             self._update_lamport_on_receive(client_clock)
             ride = self.rides.get(ride_id)
@@ -145,7 +138,6 @@ class CabService:
             return {"success": True, "message": f"Ride {ride_id} cancelled successfully", "server_clock": self.lamport_clock}
 
     def get_ride_status(self, ride_id, client_clock=None):
-        """Get ride status"""
         self._update_lamport_on_receive(client_clock)
         ride = self.rides.get(ride_id)
         if not ride:
@@ -160,7 +152,6 @@ class CabService:
         }
 
     def set_driver_available(self, driver_name, location, client_clock=None):
-        """Set driver as available at a location"""
         with self.lock:
             self._update_lamport_on_receive(client_clock)
             if driver_name not in self.users:
@@ -179,7 +170,6 @@ class CabService:
             return {"success": True, "message": f"You are now available for rides at {location}", "server_clock": self.lamport_clock}
 
     def get_available_cabs(self, location, client_clock=None):
-        """Get list of available cabs"""
         self._update_lamport_on_receive(client_clock)
         available_cabs = []
 
@@ -197,33 +187,23 @@ class CabService:
         }
 
     def get_active_rides(self, client_clock=None):
-        """Get count of active rides"""
         self._update_lamport_on_receive(client_clock)
         active_count = sum(1 for ride in self.rides.values() if ride.status in ["ACCEPTED", "IN_PROGRESS"])
         self._increment_internal()
         return {"success": True, "count": active_count, "server_clock": self.lamport_clock}
 
     def get_available_drivers(self, client_clock=None):
-        """Get count of available drivers"""
         self._update_lamport_on_receive(client_clock)
         available_count = sum(1 for available in self.driver_availability.values() if available)
         self._increment_internal()
         return {"success": True, "count": available_count, "server_clock": self.lamport_clock}
 
     def get_server_time(self, client_clock=None):
-        """Return server's current wall-clock time (timestamp) and lamport clock"""
         self._update_lamport_on_receive(client_clock)
         self._increment_internal()
         return {"server_time": time.time(), "server_clock": self.lamport_clock}
 
-    # Berkeley's algorithm kept (but now returns lamport info too)
     def synchronize_clocks(self, client_times, client_clock=None):
-        """
-        Berkeley's Algorithm:
-        client_times: dict {client_name: timestamp}
-        client_clock: lamport clock sent with this RPC
-        Returns dict {client_name: offset_to_apply} and server lamport
-        """
         self._update_lamport_on_receive(client_clock)
         server_time = time.time()
         all_times = [server_time] + list(client_times.values())
@@ -238,14 +218,12 @@ class CabService:
 
     # Helper methods
     def find_nearest_driver(self, pickup):
-        """Find nearest available driver (simplified logic)"""
         for driver_name, is_available in self.driver_availability.items():
             if is_available:
                 return driver_name
         return None
 
     def calculate_fare(self, pickup, destination):
-        """Calculate fare based on distance (simplified)"""
         base_fare = 50.0
         distance_multiplier = 10.0
 

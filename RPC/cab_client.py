@@ -19,12 +19,10 @@ class CabClient:
 
     # --- Lamport helpers ---
     def _lamport_before_send(self):
-        """Increment Lamport clock before sending an event (RPC)."""
         self.lamport_clock += 1
         return self.lamport_clock
 
     def _lamport_update_on_receive(self, server_clock):
-        """Update Lamport clock after receiving a response with server_clock."""
         try:
             sc = int(server_clock) if server_clock is not None else 0
         except Exception:
@@ -33,7 +31,6 @@ class CabClient:
 
     # --- UI helpers ---
     def show_login_menu(self):
-        """Display login menu"""
         print("\n=== LOGIN MENU ===")
         print("1. Register")
         print("2. Login")
@@ -41,7 +38,6 @@ class CabClient:
         print("-" * 30)
 
     def show_main_menu(self):
-        """Display main menu based on user type"""
         print(f"\n=== MAIN MENU === (User: {self.current_user})")
         print("1. Book a Cab")
         print("2. Check Ride Status")
@@ -56,7 +52,6 @@ class CabClient:
 
     # --- RPC operations: always send lamport clock as last param and update on response ---
     def register_user(self):
-        """Register a new user"""
         try:
             print("\n--- Register New User ---")
             username = input("Enter username: ").strip()
@@ -80,7 +75,6 @@ class CabClient:
             print(f"Error during registration: {e}")
 
     def login_user(self):
-        """Login user"""
         try:
             print("\n--- Login ---")
             username = input("Enter username: ").strip()
@@ -105,7 +99,6 @@ class CabClient:
             print(f"Error during login: {e}")
 
     def book_cab(self):
-        """Book a cab"""
         try:
             print("\n--- Book a Cab ---")
             pickup = input("Enter pickup location: ").strip()
@@ -131,7 +124,6 @@ class CabClient:
             print(f"Error booking cab: {e}")
 
     def check_ride_status(self):
-        """Check ride status"""
         try:
             print("\n--- Check Ride Status ---")
             ride_id = input("Enter ride ID: ").strip()
@@ -153,7 +145,6 @@ class CabClient:
             print(f"Error checking ride status: {e}")
 
     def cancel_ride(self):
-        """Cancel a ride"""
         try:
             print("\n--- Cancel Ride ---")
             ride_id = input("Enter ride ID to cancel: ").strip()
@@ -175,7 +166,6 @@ class CabClient:
             print(f"Error cancelling ride: {e}")
 
     def view_available_cabs(self):
-        """View available cabs"""
         try:
             print("\n--- Available Cabs ---")
             location = input("Enter your location: ").strip()
@@ -203,7 +193,6 @@ class CabClient:
             print(f"Error fetching available cabs: {e}")
 
     def set_driver_available(self):
-        """Set driver as available"""
         try:
             print("\n--- Set Driver Available ---")
             location = input("Enter your current location: ").strip()
@@ -225,7 +214,6 @@ class CabClient:
             print(f"Error setting driver availability: {e}")
 
     def show_system_stats(self):
-        """Show system statistics"""
         try:
             print("\n--- System Statistics ---")
 
@@ -247,11 +235,10 @@ class CabClient:
             print(f"Error fetching system stats: {e}")
 
     def get_local_time(self):
-        """Return client's current time (timestamp)"""
         return time.time()
 
+    # Synchronize clock using Berkeley's algorithm (demo)
     def sync_clock_with_server(self):
-        """Synchronize clock using Berkeley's algorithm (demo)"""
         try:
             print("\n--- Clock Synchronization (Berkeley) ---")
             local_time = self.get_local_time()
@@ -268,7 +255,6 @@ class CabClient:
             print(f"Error during clock sync: {e}")
 
     def run(self):
-        """Main client loop"""
         while True:
             try:
                 if not self.current_user:
