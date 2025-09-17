@@ -16,7 +16,8 @@ It demonstrates how clients (riders and drivers) can remotely interact with a ce
 This implementation is inspired by the concepts explained in:
 - [Remote Procedure Call (RPC) – GeeksforGeeks](https://www.geeksforgeeks.org/operating-systems/remote-procedure-call-rpc-in-operating-system/)
 - [Java Remote Method Invocation (RMI) – GeeksforGeeks](https://www.geeksforgeeks.org/java/remote-method-invocation-in-java/)
-
+- [Berkeley's Algorithm - GeeksforGeeks] https://www.geeksforgeeks.org/operating-systems/berkeleys-algorithm/
+- [Lamport logical Clock Algorithm - GeeksforGeeks] https://www.geeksforgeeks.org/dsa/lamports-logical-clock/
 ---
 
 
