@@ -3,21 +3,33 @@ import sys
 import time
 
 class CabClient:
-    def __init__(self, server_url="http://localhost:8000"):
-        # Lamport logical clock
+    def __init__(self):
         self.lamport_clock = 0
 
-        try:
-            self.server = xmlrpc.client.ServerProxy(server_url, allow_none=True)
-            self.current_user = None
-            self.user_type = None
-            print(f"=== CAB MANAGEMENT CLIENT ===")
-            print(f"Connected to Cab Service at {server_url}")
-        except Exception as e:
-            print(f"Failed to connect to server: {e}")
+        self.server = self._discover_leader()
+        if not self.server:
+            print("Failed to connect to any server. Ensure at least one server is running.")
             sys.exit(1)
+        
+        self.current_user = None
+        self.user_type = None
+        print("=== CAB MANAGEMENT CLIENT ===")
+        print("Connected to active leader server.")
 
-    # --- Lamport helpers ---
+    def _discover_leader(self):
+        """Try connecting to each server port until one responds."""
+        ports = [5001, 5002, 5003] 
+        for port in ports:
+            try:
+                candidate_server = xmlrpc.client.ServerProxy(f"http://localhost:{port}", allow_none=True)
+                result = candidate_server.get_server_time()
+                if result:  
+                    print(f"Discovered leader on port {port}")
+                    return candidate_server
+            except Exception:
+                continue  
+        return None
+
     def _lamport_before_send(self):
         self.lamport_clock += 1
         return self.lamport_clock
@@ -29,7 +41,6 @@ class CabClient:
             sc = 0
         self.lamport_clock = max(self.lamport_clock, sc) + 1
 
-    # --- UI helpers ---
     def show_login_menu(self):
         print("\n=== LOGIN MENU ===")
         print("1. Register")
@@ -47,10 +58,9 @@ class CabClient:
             print("5. Set Driver Available (Driver only)")
         print("6. System Stats")
         print("7. Logout")
-        print("8. Sync Clock (Berkeley)")
+        print("8. Sync Clock")
         print("-" * 50)
 
-    # --- RPC operations: always send lamport clock as last param and update on response ---
     def register_user(self):
         try:
             print("\n--- Register New User ---")
@@ -64,7 +74,6 @@ class CabClient:
 
             send_clock = self._lamport_before_send()
             result = self.server.register_user(username, password, user_type, send_clock)
-            # update lamport with server's clock
             self._lamport_update_on_receive(result.get("server_clock"))
             if result["success"]:
                 print("Registration successful!")
@@ -237,12 +246,11 @@ class CabClient:
     def get_local_time(self):
         return time.time()
 
-    # Synchronize clock using Berkeley's algorithm (demo)
+
     def sync_clock_with_server(self):
         try:
-            print("\n--- Clock Synchronization (Berkeley) ---")
+            print("\n--- Clock Synchronization ---")
             local_time = self.get_local_time()
-            # For demo, assume only one client; in real, collect from all clients
             client_times = {self.current_user: local_time}
             send_clock = self._lamport_before_send()
             result = self.server.synchronize_clocks(client_times, send_clock)
@@ -250,7 +258,6 @@ class CabClient:
             offsets = result.get("offsets", {})
             offset = offsets.get(self.current_user)
             print(f"Your clock offset (wall-clock): {offset} seconds")
-            # Lamport clocks are logical; wall-clock adjustments would be separate.
         except Exception as e:
             print(f"Error during clock sync: {e}")
 

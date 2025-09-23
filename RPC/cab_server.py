@@ -1,15 +1,42 @@
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from socketserver import ThreadingMixIn
-import threading
-import time
 from ride import Ride
 from user import User
+import threading
+import http.server
+import socketserver
+import urllib.request
+import socket
+import json
+import time
+import random
 
 class RequestHandler(SimpleXMLRPCRequestHandler):
     rpc_paths = ('/RPC2',)
 
 class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     pass
+
+class ProxyHandler(http.server.BaseHTTPRequestHandler):
+    def __init__(self, target_port, *args, **kwargs):
+        self.target_port = target_port
+        super().__init__(*args, **kwargs)
+
+    def do_POST(self):
+        target_url = f"http://localhost:{self.target_port}{self.path}"
+        try:
+            req = urllib.request.Request(target_url, data=self.rfile.read(int(self.headers['Content-Length'])), headers=dict(self.headers))
+            with urllib.request.urlopen(req) as response:
+                self.send_response(response.status)
+                for header, value in response.headers.items():
+                    self.send_header(header, value)
+                self.end_headers()
+                self.wfile.write(response.read())
+        except Exception as e:
+            self.send_error(502, f"Proxy error: {e}")
+
+    def log_message(self, format, *args):
+        pass
 
 class CabService:
     def __init__(self):
@@ -19,15 +46,12 @@ class CabService:
         self.driver_availability = {}  
         self.ride_counter = 1000
         self.lock = threading.Lock()
-        self.lamport_clock = 0  # Lamport logical clock for server
+        self.lamport_clock = 0
 
-        # Initialize with sample data
         self.initialize_sample_data()
 
-    # --- Lamport helpers ---
     def _update_lamport_on_receive(self, client_clock):
         try:
-            # If client_clock is None/absent, treat as 0
             rc = int(client_clock) if client_clock is not None else 0
         except Exception:
             rc = 0
@@ -36,15 +60,12 @@ class CabService:
     def _increment_internal(self):
         self.lamport_clock += 1
 
-    # --- Data initialization ---
     def initialize_sample_data(self):
         try:
-            # Add sample drivers (use client_clock 0 for initialization)
             self.register_user("driver1", "pass123", "DRIVER", 0)
             self.register_user("driver2", "pass456", "DRIVER", 0)
             self.register_user("driver3", "pass789", "DRIVER", 0)
 
-            # Set driver availability and locations
             self.set_driver_available("driver1", "Andheri", 0)
             self.set_driver_available("driver2", "Bandra", 0)
             self.set_driver_available("driver3", "Goregaon", 0)
@@ -53,7 +74,6 @@ class CabService:
         except Exception as e:
             print(f"Error initializing sample data: {e}")
 
-    # --- RPC methods (each accepts client_clock as last param) ---
     def register_user(self, username, password, user_type, client_clock=None):
         with self.lock:
             self._update_lamport_on_receive(client_clock)
@@ -216,7 +236,6 @@ class CabService:
         print(f"[Lamport {self.lamport_clock}] Clock sync offsets: {offsets}")
         return {"offsets": offsets, "server_clock": self.lamport_clock}
 
-    # Helper methods
     def find_nearest_driver(self, pickup):
         for driver_name, is_available in self.driver_availability.items():
             if is_available:
@@ -227,10 +246,175 @@ class CabService:
         base_fare = 50.0
         distance_multiplier = 10.0
 
-        # Mock distance calculation
         mock_distance = abs(hash(pickup) - hash(destination)) % 20 + 1
 
         return base_fare + (mock_distance * distance_multiplier)
+
+class CabServer:
+    def __init__(self, server_id, port, neighbor_port, total_servers):
+        self.server_id = server_id
+        self.port = port
+        self.neighbor_port = neighbor_port
+        self.is_leader = False
+        self.active_servers = set()
+        self.election_in_progress = False
+        self.all_servers = list(range(1, total_servers + 1))
+        self.total_servers = total_servers
+        self.known_leader = 1
+        self.cab_service = CabService()
+
+    def start_election(self):
+        if self.election_in_progress or self.is_leader:
+            return
+        print(f"Server {self.server_id}: Heartbeat to leader failed. Starting election.")
+        self.election_in_progress = True
+        time.sleep(random.uniform(0, 2))
+        if self.election_in_progress:
+            initiator_port = self.port + 1000
+            message = {'type': 'election', 'initiator': self.server_id, 'candidates': [self.server_id], 'initiator_port': initiator_port}
+            success = self.send_to_neighbor(message)
+            if not success:
+                success = self.send_to_next_available_neighbor(message)
+            if not success:
+                if self.server_id == max(self.all_servers):
+                    self.is_leader = True
+                    print(f"Server {self.server_id}: Elected as leader (no neighbors available). Candidates: {message['candidates']}")
+                    self.election_in_progress = False
+
+    def handle_election(self, data):
+        if data['type'] == 'election':
+            initiator = data['initiator']
+            candidates = data['candidates']
+            initiator_port = data['initiator_port']
+            if self.server_id not in candidates:
+                candidates.append(self.server_id)
+            print(f"Server {self.server_id}: Received election from initiator {initiator}, candidates: {candidates}")
+            if initiator == self.server_id:
+                leader_id = max(candidates)
+                self.is_leader = (leader_id == self.server_id)
+                self.known_leader = leader_id  
+                print(f"Server {self.server_id}: Election complete, leader is {leader_id}, candidates: {candidates}")
+                self.send_to_neighbor({'type': 'leader', 'leader_id': leader_id, 'candidates': candidates, 'initiator': self.server_id})
+                self.election_in_progress = False  
+            else:
+                message = {'type': 'election', 'initiator': initiator, 'candidates': candidates, 'initiator_port': initiator_port}
+                success = self.send_to_neighbor(message)
+                if not success:
+                    success = self.send_to_next_available_neighbor(message)
+                if not success:
+                    for attempt in range(3):
+                        try:
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            sock.connect(('localhost', initiator_port))
+                            sock.send(json.dumps(message).encode())
+                            sock.close()
+                            print(f"Server {self.server_id}: Sent election back to initiator {initiator}")
+                            break
+                        except Exception:
+                            time.sleep(0.5)
+                    else:
+                        print(f"Server {self.server_id}: Could not send back to initiator after retries.")
+        elif data['type'] == 'leader':
+            leader_id = data['leader_id']
+            candidates = data.get('candidates', [])
+            initiator = data.get('initiator', None)
+            self.known_leader = leader_id
+            print(f"Server {self.server_id}: Notified of new leader {leader_id} with candidates {candidates}")
+            if leader_id == self.server_id:
+                self.is_leader = True
+                print(f"Server {self.server_id}: Confirmed as leader. Candidates passed: {candidates}")
+            else:
+                self.is_leader = False
+            if initiator == self.server_id:
+                print(f"Server {self.server_id}: Leader notification circulated back to initiator.")
+            else:
+                message = {'type': 'leader', 'leader_id': leader_id, 'candidates': candidates, 'initiator': initiator}
+                success = self.send_to_neighbor(message)
+                if not success:
+                    success = self.send_to_next_available_neighbor(message)
+                if not success:
+                    print(f"Server {self.server_id}: Could not forward leader message to any neighbor.")
+        elif data['type'] == 'heartbeat':
+            pass
+
+    def send_to_neighbor(self, message):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(('localhost', self.neighbor_port + 1000))
+            sock.send(json.dumps(message).encode())
+            sock.close()
+            return True
+        except Exception:
+            if message.get('type') != 'leader':
+                print(f"Server {self.server_id}: Server {self.neighbor_port} down.")
+            return False
+
+    def send_to_next_available_neighbor(self, message):
+        candidates = message.get('candidates', [])
+        for i in range(1, self.total_servers):
+            next_id = ((self.server_id + i - 1) % self.total_servers) + 1
+            if next_id in candidates:
+                continue
+            next_port = 5000 + next_id
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect(('localhost', next_port + 1000))
+                sock.send(json.dumps(message).encode())
+                sock.close()
+                print(f"Server {self.server_id}: Sent to next available server {next_port}")
+                return True
+            except Exception:
+                continue
+        return False
+
+    def listen_for_election(self):
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            server_sock.bind(('localhost', self.port + 1000))
+            server_sock.listen(5)
+            while True:
+                conn, _ = server_sock.accept()
+                data = json.loads(conn.recv(1024).decode())
+                self.handle_election(data)
+                conn.close()
+        except:
+            pass
+        finally:
+            server_sock.close()
+
+    def heartbeat(self):
+        while True:
+            time.sleep(5)
+            try:
+                leader_port = 5000 + self.known_leader
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect(('localhost', leader_port + 1000))
+                sock.send(json.dumps({'type': 'heartbeat'}).encode())
+                sock.close()
+            except Exception:
+                neighbor_id = (self.server_id % self.total_servers) + 1
+                if neighbor_id == self.known_leader and not self.is_leader and not self.election_in_progress:
+                    self.start_election()
+
+    def run(self):
+        xmlrpc_server = ThreadedXMLRPCServer(("localhost", self.port), requestHandler=RequestHandler, allow_none=True)
+        xmlrpc_server.register_introspection_functions()
+        xmlrpc_server.register_instance(self.cab_service)
+        
+        print(f"Server {self.server_id} running XML-RPC on port {self.port}")
+        
+        threading.Thread(target=self.listen_for_election, daemon=True).start()
+        
+        threading.Thread(target=self.heartbeat, daemon=True).start()
+        
+        if self.server_id == 1:
+            self.is_leader = True
+            print(f"Server {self.server_id}: Initial leader.")
+        
+        try:
+            xmlrpc_server.serve_forever()
+        except KeyboardInterrupt:
+            print(f"Server {self.server_id} shutting down...")
 
 def main():
     server = ThreadedXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
@@ -250,4 +434,13 @@ def main():
         server.shutdown()
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) < 3:
+        print("Usage: python cab_server.py <server_id> <total_servers>")
+        sys.exit(1)
+    server_id = int(sys.argv[1])
+    total_servers = int(sys.argv[2])
+    port = 5000 + server_id
+    neighbor_port = 5000 + ((server_id % total_servers) + 1)
+    server = CabServer(server_id, port, neighbor_port, total_servers)
+    server.run()
