@@ -4,7 +4,6 @@ from ride import Ride
 from user import User
 import threading
 import http.server
-import socketserver
 import urllib.request
 import socket
 import json
