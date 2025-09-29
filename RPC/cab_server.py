@@ -38,7 +38,8 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 class CabService:
-    def __init__(self):
+    def __init__(self, server):
+        self.server = server
         self.users = {}
         self.rides = {}
         self.driver_locations = {}  
@@ -47,7 +48,8 @@ class CabService:
         self.lock = threading.Lock()
         self.lamport_clock = 0
 
-        self.initialize_sample_data()
+        if self.server.is_leader:
+            self.initialize_sample_data()
 
     def _update_lamport_on_receive(self, client_clock):
         try:
@@ -87,6 +89,10 @@ class CabService:
 
             self._increment_internal()
             print(f"[Lamport {self.lamport_clock}] User registered: {username} as {user_type}")
+            
+            if self.server.is_leader:
+                self.server.send_update('register_user', [username, password, user_type], self.lamport_clock)
+            
             return {"success": True, "message": "Registration successful", "server_clock": self.lamport_clock}
 
     def authenticate_user(self, username, password, client_clock=None):
@@ -128,6 +134,10 @@ class CabService:
 
             self._increment_internal()
             print(f"[Lamport {self.lamport_clock}] Ride booked - ID: {ride_id}, Driver: {assigned_driver}, Fare: ₹{fare}")
+            
+            if self.server.is_leader:
+                self.server.send_update('book_cab', [username, pickup, destination, fare], self.lamport_clock)
+            
             return {
                 "success": True,
                 "ride_id": ride_id,
@@ -154,6 +164,10 @@ class CabService:
 
             self._increment_internal()
             print(f"[Lamport {self.lamport_clock}] Ride cancelled: {ride_id}")
+            
+            if self.server.is_leader:
+                self.server.send_update('cancel_ride', [ride_id], self.lamport_clock)
+            
             return {"success": True, "message": f"Ride {ride_id} cancelled successfully", "server_clock": self.lamport_clock}
 
     def get_ride_status(self, ride_id, client_clock=None):
@@ -186,6 +200,10 @@ class CabService:
 
             self._increment_internal()
             print(f"[Lamport {self.lamport_clock}] Driver {driver_name} is now available at {location}")
+            
+            if self.server.is_leader:
+                self.server.send_update('set_driver_available', [driver_name, location], self.lamport_clock)
+            
             return {"success": True, "message": f"You are now available for rides at {location}", "server_clock": self.lamport_clock}
 
     def get_available_cabs(self, location, client_clock=None):
@@ -249,6 +267,64 @@ class CabService:
 
         return base_fare + (mock_distance * distance_multiplier)
 
+    def replicate_operation(self, operation, params, lamport_clock):
+        with self.lock:
+            self._update_lamport_on_receive(lamport_clock)
+            if operation == 'register_user':
+                self._register_user_internal(*params)
+            elif operation == 'book_cab':
+                self._book_cab_internal(*params)
+            elif operation == 'cancel_ride':
+                self._cancel_ride_internal(*params)
+            elif operation == 'set_driver_available':
+                self._set_driver_available_internal(*params)
+            self._increment_internal()
+
+    def _register_user_internal(self, username, password, user_type):
+        if username in self.users:
+            return
+        user = User(username, password, user_type)
+        self.users[username] = user
+        if user_type == "DRIVER":
+            self.driver_availability[username] = False
+        print(f"[Lamport {self.lamport_clock}] User registered (replicated): {username} as {user_type}")
+
+    def _book_cab_internal(self, username, pickup, destination, fare):
+        if username not in self.users:
+            return
+        assigned_driver = self.find_nearest_driver(pickup)
+        if not assigned_driver:
+            return
+        self.ride_counter += 1
+        ride_id = f"RIDE_{self.ride_counter}"
+        ride = Ride(ride_id, username, pickup, destination)
+        ride.driver_name = assigned_driver
+        ride.status = "ACCEPTED"
+        ride.fare = fare  
+        self.rides[ride_id] = ride
+        self.driver_availability[assigned_driver] = False
+        print(f"[Lamport {self.lamport_clock}] Ride booked (replicated) - ID: {ride_id}, Driver: {assigned_driver}, Fare: ₹{fare}")
+
+    def _cancel_ride_internal(self, ride_id):
+        ride = self.rides.get(ride_id)
+        if not ride or ride.status == "COMPLETED":
+            return
+        ride.status = "CANCELLED"
+        if ride.driver_name:
+            self.driver_availability[ride.driver_name] = True
+        print(f"[Lamport {self.lamport_clock}] Ride cancelled (replicated): {ride_id}")
+
+    def _set_driver_available_internal(self, driver_name, location):
+        if driver_name not in self.users:
+            return
+        user = self.users[driver_name]
+        if user.user_type != "DRIVER":
+            return
+        self.driver_availability[driver_name] = True
+        self.driver_locations[driver_name] = location
+        user.current_location = location
+        print(f"[Lamport {self.lamport_clock}] Driver {driver_name} available (replicated) at {location}")
+
 class CabServer:
     def __init__(self, server_id, port, neighbor_port, total_servers):
         self.server_id = server_id
@@ -260,7 +336,20 @@ class CabServer:
         self.all_servers = list(range(1, total_servers + 1))
         self.total_servers = total_servers
         self.known_leader = 1
-        self.cab_service = CabService()
+        self.cab_service = CabService(self)
+
+    def send_update(self, operation, params, lamport_clock):
+        for sid in self.all_servers:
+            if sid != self.server_id:
+                update_port = 5000 + sid + 1000
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.connect(('localhost', update_port))
+                    message = {'type': 'update', 'operation': operation, 'params': params, 'lamport_clock': lamport_clock}
+                    sock.send(json.dumps(message).encode())
+                    sock.close()
+                except Exception:
+                    pass  
 
     def start_election(self):
         if self.election_in_progress or self.is_leader:
@@ -333,6 +422,8 @@ class CabServer:
                     success = self.send_to_next_available_neighbor(message)
                 if not success:
                     print(f"Server {self.server_id}: Could not forward leader message to any neighbor.")
+        elif data['type'] == 'update':
+            self.cab_service.replicate_operation(data['operation'], data['params'], data['lamport_clock'])
         elif data['type'] == 'heartbeat':
             pass
 
@@ -384,13 +475,19 @@ class CabServer:
     def heartbeat(self):
         while True:
             time.sleep(5)
-            try:
-                leader_port = 5000 + self.known_leader
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect(('localhost', leader_port + 1000))
-                sock.send(json.dumps({'type': 'heartbeat'}).encode())
-                sock.close()
-            except Exception:
+            leader_port = 5000 + self.known_leader
+            for attempt in range(3):
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(2)  
+                    sock.connect(('localhost', leader_port + 1000))
+                    sock.send(json.dumps({'type': 'heartbeat'}).encode())
+                    sock.close()
+                    break 
+                except Exception as e:
+                    print(f"Server {self.server_id}: Heartbeat attempt {attempt + 1} failed to leader {self.known_leader}: {e}")
+                    time.sleep(1) 
+            else:
                 neighbor_id = (self.server_id % self.total_servers) + 1
                 if neighbor_id == self.known_leader and not self.is_leader and not self.election_in_progress:
                     self.start_election()
@@ -419,7 +516,7 @@ def main():
     server = ThreadedXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
     server.register_introspection_functions()
 
-    cab_service = CabService()
+    cab_service = CabService(None)  
     server.register_instance(cab_service)
 
     print("=== CAB MANAGEMENT SERVER STARTED ===")
