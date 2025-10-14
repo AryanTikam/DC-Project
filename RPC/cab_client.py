@@ -5,30 +5,11 @@ import time
 class CabClient:
     def __init__(self):
         self.lamport_clock = 0
-
-        self.server = self._discover_leader()
-        if not self.server:
-            print("Failed to connect to any server. Ensure at least one server is running.")
-            sys.exit(1)
-        
+        self.server = xmlrpc.client.ServerProxy("http://localhost:5000", allow_none=True)
         self.current_user = None
         self.user_type = None
         print("=== CAB MANAGEMENT CLIENT ===")
-        print("Connected to active leader server.")
-
-    def _discover_leader(self):
-        """Try connecting to each server port until one responds."""
-        ports = [5001, 5002, 5003] 
-        for port in ports:
-            try:
-                candidate_server = xmlrpc.client.ServerProxy(f"http://localhost:{port}", allow_none=True)
-                result = candidate_server.get_server_time()
-                if result:  
-                    print(f"Discovered leader on port {port}")
-                    return candidate_server
-            except Exception:
-                continue  
-        return None
+        print("Connected to load balancer.")
 
     def _lamport_before_send(self):
         self.lamport_clock += 1
