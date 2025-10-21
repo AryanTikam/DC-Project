@@ -1,0 +1,16 @@
+# Backend RPC Services
+flask
+flask-cors
+python-dateutil
+websockets
+
+# Security
+bcrypt
+PyJWT
+
+# Testing
+pytest
+
+# Development Tools
+black
+flake8
