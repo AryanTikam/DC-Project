@@ -1,0 +1,10 @@
+RIDE_1001,Delhi,Mumbai,500.0
+RIDE_1002,Delhi,Bangalore,800.0
+RIDE_1003,Mumbai,Delhi,450.0
+RIDE_1004,Delhi,Chennai,700.0
+RIDE_1005,Mumbai,Bangalore,600.0
+RIDE_1006,Delhi,Mumbai,550.0
+RIDE_1007,Bangalore,Delhi,750.0
+RIDE_1008,Mumbai,Chennai,650.0
+RIDE_1009,Delhi,Bangalore,850.0
+RIDE_1010,Chennai,Delhi,720.0
