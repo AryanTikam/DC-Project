@@ -1,3 +1,12 @@
-com/dcproject/mapreduce/RideCountReducer.class
+com/dcproject/mapreduce/UserBehaviorDriver.class
 com/dcproject/mapreduce/RideCountDriver.class
+com/dcproject/mapreduce/RouteFareDriver.class
+com/dcproject/mapreduce/RouteFareMapper.class
 com/dcproject/mapreduce/RideCountMapper.class
+com/dcproject/mapreduce/RouteFareReducer.class
+com/dcproject/mapreduce/DriverPerformanceReducer.class
+com/dcproject/mapreduce/DriverPerformanceMapper.class
+com/dcproject/mapreduce/DriverPerformanceDriver.class
+com/dcproject/mapreduce/UserBehaviorMapper.class
+com/dcproject/mapreduce/UserBehaviorReducer.class
+com/dcproject/mapreduce/RideCountReducer.class

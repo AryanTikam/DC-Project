@@ -7,10 +7,10 @@ import org.apache.hadoop.mapreduce.Mapper;
 
 import java.io.IOException;
 
-public class RideCountMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+public class UserBehaviorMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
 
     private final static IntWritable one = new IntWritable(1);
-    private Text pickupLocation = new Text();
+    private Text userName = new Text();
 
     @Override
     protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -18,10 +18,10 @@ public class RideCountMapper extends Mapper<LongWritable, Text, Text, IntWritabl
         String line = value.toString();
         String[] fields = line.split(",");
 
-        if (fields.length >= 3) {
-            String pickup = fields[2].trim(); // pickup location is the third field (0-indexed)
-            pickupLocation.set(pickup);
-            context.write(pickupLocation, one);
+        if (fields.length >= 2) {
+            String user = fields[1].trim(); // rider_name is the 2nd field
+            userName.set(user);
+            context.write(userName, one);
         }
     }
 }

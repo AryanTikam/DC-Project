@@ -1,12 +1,12 @@
-# MapReduce Job for Ride Count by Pickup Location
+# MapReduce Jobs for Cab Management System Analytics
 
-This project demonstrates a simple MapReduce job using Apache Hadoop to count the number of rides originating from each pickup location.
+This project demonstrates multiple MapReduce jobs using Apache Hadoop to analyze ride data from a distributed cab booking system.
 
 ## Prerequisites
 
 - Java 8 or higher
 - Apache Maven
-- Apache Hadoop (for running the job)
+- Apache Hadoop (for running the jobs)
 
 ## Project Structure
 
@@ -15,25 +15,59 @@ MapReduce/
 ├── pom.xml
 ├── sample_input.txt
 ├── src/main/java/com/dcproject/mapreduce/
-│   ├── RideCountDriver.java
+│   ├── RideCountDriver.java          # Original: Count rides by pickup location
 │   ├── RideCountMapper.java
-│   └── RideCountReducer.java
+│   ├── RideCountReducer.java
+│   ├── DriverPerformanceDriver.java  # New: Count rides per driver
+│   ├── DriverPerformanceMapper.java
+│   ├── DriverPerformanceReducer.java
+│   ├── RouteFareDriver.java          # New: Average fare per route
+│   ├── RouteFareMapper.java
+│   ├── RouteFareReducer.java
+│   ├── TimeUsageDriver.java          # New: Count rides per hour
+│   ├── TimeUsageMapper.java
+│   ├── TimeUsageReducer.java
+│   ├── UserBehaviorDriver.java       # New: Count rides per user
+│   ├── UserBehaviorMapper.java
+│   └── UserBehaviorReducer.java
 └── README.md
 ```
 
-## Components
+## Input Data Format
 
-### RideCountMapper
-- Reads input lines in CSV format: `ride_id,pickup,destination,fare`
-- Emits key-value pairs: `(pickup_location, 1)`
+All jobs use CSV format: `ride_id,rider_name,pickup,destination,fare,driver_name,timestamp`
 
-### RideCountReducer
-- Aggregates counts for each pickup location
-- Outputs: `(pickup_location, total_count)`
+Example:
+```
+RIDE_1001,user1,Delhi,Mumbai,500.0,driver1,2023-10-21T10:00:00
+```
 
-### RideCountDriver
-- Configures and runs the MapReduce job
-- Sets input and output paths
+## Available MapReduce Jobs
+
+### 1. Ride Count by Pickup Location (Original)
+- **Purpose**: Count rides originating from each pickup location
+- **Command**: `hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar sample_input.txt output_ride_count`
+- **Output**: `location count`
+
+### 2. Driver Performance Analysis
+- **Purpose**: Count rides completed by each driver
+- **Command**: `hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.DriverPerformanceDriver sample_input.txt output_driver_perf`
+- **Output**: `driver_name ride_count`
+
+### 3. Route and Fare Optimization
+- **Purpose**: Calculate average fare for each pickup-destination route
+- **Command**: `hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RouteFareDriver sample_input.txt output_route_fare`
+- **Output**: `pickup-destination average_fare`
+
+### 4. Time-Based Usage Patterns
+- **Purpose**: Count rides by hour of day
+- **Command**: `hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.TimeUsageDriver sample_input.txt output_time_usage`
+- **Output**: `hour ride_count`
+
+### 5. User Behavior Insights
+- **Purpose**: Count rides booked by each user
+- **Command**: `hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.UserBehaviorDriver sample_input.txt output_user_behavior`
+- **Output**: `user_name ride_count`
 
 ## Building the Project
 
@@ -42,14 +76,27 @@ cd MapReduce
 mvn clean package
 ```
 
-This will create a shaded JAR file in the `target` directory.
+This creates a shaded JAR file in the `target` directory.
 
-## Running the MapReduce Job
+## Running Jobs
 
 ### Local Mode (for testing)
 
 ```bash
-hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RideCountDriver sample_input.txt output
+# Example: Run ride count by pickup location
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RideCountDriver sample_input.txt output_ride_count
+
+# Example: Run driver performance analysis
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.DriverPerformanceDriver sample_input.txt output_driver_perf
+
+# Example: Run route and fare optimization
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RouteFareDriver sample_input.txt output_route_fare
+
+# Example: Run time-based usage patterns
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.TimeUsageDriver sample_input.txt output_time_usage
+
+# Example: Run user behavior insights
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.UserBehaviorDriver sample_input.txt output_user_behavior
 ```
 
 ### On Hadoop Cluster
@@ -59,43 +106,67 @@ hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RideCou
 hdfs dfs -put sample_input.txt /input/
 ```
 
-2. Run the job:
+2. Run a job:
 ```bash
-hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.RideCountDriver /input/sample_input.txt /output/ride_counts
+hadoop jar target/mapreduce-job-1.0-SNAPSHOT.jar com.dcproject.mapreduce.DriverPerformanceDriver /input/sample_input.txt /output/driver_perf
 ```
 
 3. View results:
 ```bash
-hdfs dfs -cat /output/ride_counts/part-r-00000
+hdfs dfs -cat /output/driver_perf/part-r-00000
 ```
 
-## Expected Output
+## Expected Outputs (Sample Data)
 
-For the sample input, you should see output like:
+### Driver Performance
 ```
-Bangalore	1
-Chennai	1
-Delhi	5
-Mumbai	3
+driver1	3
+driver2	3
+driver3	4
 ```
 
-This shows the count of rides starting from each location.
+### Route and Fare
+```
+Bangalore-Delhi	750.0
+Chennai-Delhi	720.0
+Delhi-Bangalore	825.0
+Delhi-Chennai	700.0
+Delhi-Mumbai	525.0
+Mumbai-Bangalore	600.0
+Mumbai-Chennai	650.0
+Mumbai-Delhi	450.0
+```
 
-## Customization
+### Time-Based Usage
+```
+10	1
+11	1
+12	1
+13	1
+14	1
+15	1
+16	1
+17	1
+18	1
+19	1
+```
 
-You can modify the input format or the logic by editing the Mapper and Reducer classes. For example:
-- Change the CSV parsing logic
-- Count by destination instead of pickup
-- Calculate average fares per location
+### User Behavior
+```
+user1	3
+user2	2
+user3	2
+user4	1
+user5	1
+user6	1
+```
 
 ## Integration with Your Cab Management System
 
-This MapReduce job can be used to analyze ride data from your distributed cab booking system. You could:
-- Process logs to find popular pickup locations
-- Analyze fare patterns
-- Generate reports on system usage
+These MapReduce jobs can be scheduled to run periodically on your ride data exported from the RPC servers. Use the insights for:
+- **Driver Performance**: Optimize assignments and incentives
+- **Route/Fare**: Implement dynamic pricing and route recommendations
+- **Time Usage**: Plan staffing and surge pricing
+- **User Behavior**: Develop loyalty programs and targeted marketing
 
-To integrate, you would need to:
-1. Export ride data to HDFS in the expected format
-2. Schedule the job to run periodically
-3. Use the output for analytics or decision making
+For production, integrate with tools like Apache Oozie for workflow scheduling or export data directly to HDFS from your distributed servers.

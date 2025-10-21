@@ -26,11 +26,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <transformers>
-                <transformer>
-                  <mainClass>com.dcproject.mapreduce.RideCountDriver</mainClass>
-                </transformer>
-              </transformers>
+              <transformers />
             </configuration>
           </execution>
         </executions>
