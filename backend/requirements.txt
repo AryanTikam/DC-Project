@@ -4,9 +4,14 @@ flask-cors
 python-dateutil
 websockets
 
+# Database
+pymongo
+python-dotenv
+
 # Security
 bcrypt
 PyJWT
+flask-session
 
 # Testing
 pytest

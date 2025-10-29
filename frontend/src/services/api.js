@@ -149,6 +149,21 @@ export const systemService = {
   getLoadBalancerStats: async () => {
     const response = await apiClient.get('/load_balancer/stats');
     return response.data;
+  },
+
+  getUserRides: async (username) => {
+    const response = await apiClient.get(`/user/${username}/rides`);
+    return response.data;
+  },
+
+  getAvailableRidesForDrivers: async () => {
+    const response = await apiClient.get('/rides/available');
+    return response.data;
+  },
+
+  acceptRide: async (rideId) => {
+    const response = await apiClient.post(`/ride/${rideId}/accept`);
+    return response.data;
   }
 };
 
