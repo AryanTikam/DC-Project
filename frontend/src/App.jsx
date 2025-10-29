@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import BookRide from './pages/BookRide';
 import { useAuth } from './context/AuthContext';
-import { systemService, driverService } from './services/api';
+import { systemService, driverService, rideService } from './services/api';
 import toast from 'react-hot-toast';
 
 // Dashboard Component
@@ -152,29 +152,71 @@ const MyRides = () => {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cancellingRide, setCancellingRide] = useState(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedRide, setSelectedRide] = useState(null);
 
   useEffect(() => {
-    const fetchRides = async () => {
-      try {
-        setLoading(true);
-        const response = await systemService.getUserRides(currentUser.username);
-        if (response.success) {
-          setRides(response.rides);
-        } else {
-          setError('Failed to load rides');
-        }
-      } catch (err) {
-        setError('An error occurred while fetching rides');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (currentUser) {
-      fetchRides();
-    }
+    fetchRides();
   }, [currentUser]);
+
+  const fetchRides = async () => {
+    try {
+      setLoading(true);
+      const response = await systemService.getUserRides(currentUser.username);
+      if (response.success) {
+        setRides(response.rides);
+      } else {
+        setError('Failed to load rides');
+      }
+    } catch (err) {
+      setError('An error occurred while fetching rides');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelClick = (ride) => {
+    setSelectedRide(ride);
+    setShowCancelModal(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!selectedRide) return;
+    
+    setCancellingRide(selectedRide.ride_id);
+    try {
+      const response = await rideService.cancelRide(selectedRide.ride_id);
+      if (response.success) {
+        toast.success(
+          `Ride cancelled. Rating penalty: -${response.rating_penalty.toFixed(1)} ⭐`,
+          { duration: 6000 }
+        );
+        fetchRides(); // Refresh the list
+      } else {
+        toast.error(response.message || 'Failed to cancel ride');
+      }
+    } catch (err) {
+      toast.error('Failed to cancel ride');
+      console.error(err);
+    } finally {
+      setCancellingRide(null);
+      setShowCancelModal(false);
+      setSelectedRide(null);
+    }
+  };
+
+  const getRatingPenalty = (status) => {
+    if (status === 'REQUESTED') return 0.1;
+    if (status === 'ACCEPTED') return 0.3;
+    if (status === 'IN_PROGRESS') return 0.5;
+    return 0;
+  };
+
+  const canCancelRide = (ride) => {
+    return ride.status !== 'COMPLETED' && ride.status !== 'CANCELLED';
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -338,11 +380,100 @@ const MyRides = () => {
                     </div>
                   </div>
                 </div>
+
+                {canCancelRide(ride) && (
+                  <button
+                    onClick={() => handleCancelClick(ride)}
+                    disabled={cancellingRide === ride.ride_id}
+                    className="w-full mt-4 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white font-bold rounded-xl shadow-lg hover:from-red-600 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cancellingRide === ride.ride_id ? (
+                      <span className="flex items-center justify-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Cancelling...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Cancel Ride
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && selectedRide && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 animate-fade-in">
+            <div className="text-center mb-6">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+                <svg className="h-10 w-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Cancel Ride?</h3>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to cancel this ride?
+              </p>
+            </div>
+
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start space-x-3">
+                <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <h4 className="font-bold text-red-800 mb-2">Warning: Rating Penalty</h4>
+                  <p className="text-sm text-red-700 mb-2">
+                    Cancelling this ride will reduce your rating by <strong>{getRatingPenalty(selectedRide.status).toFixed(1)} stars</strong>.
+                  </p>
+                  <ul className="text-xs text-red-600 space-y-1">
+                    <li>• Before assignment: -0.1 ⭐</li>
+                    <li>• After driver accepts: -0.3 ⭐</li>
+                    <li>• During ride: -0.5 ⭐</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <p className="text-sm text-gray-600 mb-2"><strong>Ride Details:</strong></p>
+              <p className="text-sm text-gray-800">From: {selectedRide.pickup}</p>
+              <p className="text-sm text-gray-800">To: {selectedRide.destination}</p>
+              <p className="text-sm text-gray-800">Status: <span className="font-semibold">{selectedRide.status}</span></p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setSelectedRide(null);
+                }}
+                className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Keep Ride
+              </button>
+              <button
+                onClick={handleCancelConfirm}
+                disabled={cancellingRide}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancellingRide ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

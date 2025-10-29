@@ -111,12 +111,26 @@ export const rideService = {
  * Driver Service
  */
 export const driverService = {
-  setAvailability: async (driverName, location, isAvailable = true) => {
-    const response = await apiClient.post('/driver/availability', {
-      driver_name: driverName,
-      location,
-      is_available: isAvailable
-    });
+  setAvailability: async (params) => {
+    // Support both object parameter and individual parameters for backward compatibility
+    let payload;
+    if (typeof params === 'object' && params !== null && !Array.isArray(params)) {
+      // If params is an object, use it directly (new style)
+      payload = {
+        is_available: params.available !== undefined ? params.available : params.is_available,
+        location: params.current_location || params.location
+      };
+    } else {
+      // Old style with separate parameters
+      const [driverName, location, isAvailable] = arguments;
+      payload = {
+        driver_name: driverName,
+        location,
+        is_available: isAvailable
+      };
+    }
+    
+    const response = await apiClient.post('/driver/availability', payload);
     return response.data;
   },
 

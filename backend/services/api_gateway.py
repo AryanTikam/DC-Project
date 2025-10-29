@@ -320,9 +320,10 @@ def get_ride_status(ride_id):
 @app.route('/api/ride/<ride_id>/cancel', methods=['POST'])
 @require_auth
 def cancel_ride(ride_id):
-    """API endpoint for cancelling a ride"""
+    """API endpoint for cancelling a ride with rating penalty"""
     try:
         username = request.current_user['username']
+        user_type = request.current_user['user_type']
         
         # Find the ride
         ride = db.rides.find_one({"ride_id": ride_id})
@@ -334,15 +335,71 @@ def cancel_ride(ride_id):
         if ride['rider_name'] != username and ride.get('driver_name') != username:
             return jsonify({"success": False, "message": "Unauthorized"}), 403
         
+        # Check if ride can be cancelled
+        if ride['status'] in ['COMPLETED', 'CANCELLED']:
+            return jsonify({"success": False, "message": f"Cannot cancel a {ride['status'].lower()} ride"}), 400
+        
+        # Determine penalty based on ride status and who is cancelling
+        rating_penalty = 0.0
+        cancellation_reason = ""
+        
+        if ride['status'] == 'REQUESTED':
+            # Early cancellation - smaller penalty
+            rating_penalty = 0.1
+            cancellation_reason = "Cancelled before driver assignment"
+        elif ride['status'] == 'ACCEPTED':
+            # Cancelling after driver accepted - medium penalty
+            rating_penalty = 0.3
+            if user_type == 'DRIVER':
+                cancellation_reason = "Driver cancelled after accepting"
+            else:
+                cancellation_reason = "Rider cancelled after driver accepted"
+        elif ride['status'] == 'IN_PROGRESS':
+            # Cancelling during ride - highest penalty
+            rating_penalty = 0.5
+            if user_type == 'DRIVER':
+                cancellation_reason = "Driver cancelled during ride"
+            else:
+                cancellation_reason = "Rider cancelled during ride"
+        
+        # Apply rating penalty to the user who cancelled
+        user = db.users.find_one({"username": username})
+        if user:
+            current_rating = user.get('rating', 5.0)
+            new_rating = max(1.0, current_rating - rating_penalty)  # Minimum rating is 1.0
+            
+            db.users.update_one(
+                {"username": username},
+                {"$set": {"rating": new_rating}}
+            )
+        
         # Update ride status
         result = db.rides.update_one(
             {"ride_id": ride_id},
-            {"$set": {"status": "CANCELLED"}}
+            {"$set": {
+                "status": "CANCELLED",
+                "cancelled_by": username,
+                "cancellation_reason": cancellation_reason,
+                "cancellation_time": time.time()
+            }}
         )
         
+        # If driver was assigned, make them available again
+        if ride.get('driver_name'):
+            db.users.update_one(
+                {"username": ride['driver_name']},
+                {"$set": {"is_available": True}}
+            )
+        
         if result.modified_count > 0:
-            logger.info(f"Ride cancelled: {ride_id}")
-            return jsonify({"success": True, "message": "Ride cancelled successfully"}), 200
+            logger.info(f"Ride cancelled: {ride_id} by {username} (penalty: {rating_penalty})")
+            return jsonify({
+                "success": True, 
+                "message": "Ride cancelled successfully",
+                "rating_penalty": rating_penalty,
+                "new_rating": new_rating if user else None,
+                "reason": cancellation_reason
+            }), 200
         else:
             return jsonify({"success": False, "message": "Failed to cancel ride"}), 400
             
@@ -411,7 +468,7 @@ def get_active_rides():
 @app.route('/api/rides/available', methods=['GET'])
 @require_auth
 def get_available_rides_for_drivers():
-    """API endpoint for getting available rides (for drivers)"""
+    """API endpoint for getting available rides (for drivers only)"""
     try:
         user_type = request.current_user['user_type']
         

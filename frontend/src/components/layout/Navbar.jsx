@@ -28,6 +28,7 @@ export default function Navbar() {
   if (currentUser && currentUser.userType === 'DRIVER') {
     navigation.push(
       { name: 'Available Rides', href: '/available-rides', current: location.pathname === '/available-rides' },
+      { name: 'My Rides', href: '/my-rides', current: location.pathname === '/my-rides' },
       { name: 'Set Availability', href: '/availability', current: location.pathname === '/availability' }
     );
   }
